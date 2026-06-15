@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+<title>เกมมือวิเศษ ตอบคำถาม 🖐️</title>
+<meta name="theme-color" content="#5b21b6" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  /* ============================================================
+     เกมตอบคำถามด้วยการเคลื่อนไหวมือ (MediaPipe Hands)
+     ไฟล์เดียวจบ — ทุกอย่างอยู่ในนี้
+     ============================================================ */
+  :root{
+    --bg1:#6d28d9; --bg2:#2563eb; --bg3:#0ea5e9;
+    --card:#ffffff; --ink:#1e293b; --muted:#64748b;
+    --good:#22c55e; --bad:#ef4444; --warn:#f59e0b;
+    --pink:#ec4899; --purple:#8b5cf6;
+    --shadow:0 10px 30px rgba(0,0,0,.25);
+    --radius:22px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0; font-family:'Kanit',system-ui,-apple-system,sans-serif;
+    color:var(--ink); overflow:hidden;
+    background:linear-gradient(135deg,var(--bg1),var(--bg2) 60%,var(--bg3));
+  }
+  button{font-family:inherit; cursor:pointer; border:none;}
+  input,select{font-family:inherit;}
+
+  /* ---------- ระบบสลับหน้าจอ (screens) ---------- */
+  .screen{position:fixed; inset:0; display:none; overflow:auto;}
+  .screen.active{display:block;}
+  #screen-play.active{display:block; overflow:hidden;}
+
+  /* ---------- ปุ่มทั่วไป ---------- */
+  .btn{
+    border-radius:999px; padding:14px 26px; font-size:18px; font-weight:600;
+    background:#fff; color:var(--ink); box-shadow:var(--shadow);
+    transition:transform .08s ease, filter .15s ease;
+  }
+  .btn:active{transform:scale(.95);}
+  .btn.primary{background:linear-gradient(135deg,#f59e0b,#f97316); color:#fff;}
+  .btn.green{background:linear-gradient(135deg,#22c55e,#16a34a); color:#fff;}
+  .btn.blue{background:linear-gradient(135deg,#3b82f6,#2563eb); color:#fff;}
+  .btn.pink{background:linear-gradient(135deg,#ec4899,#db2777); color:#fff;}
+  .btn.ghost{background:rgba(255,255,255,.15); color:#fff; box-shadow:none; border:2px solid rgba(255,255,255,.5);}
+  .btn.danger{background:linear-gradient(135deg,#ef4444,#dc2626); color:#fff;}
+  .btn.sm{padding:8px 16px; font-size:15px;}
+  .btn:disabled{opacity:.45; cursor:not-allowed;}
+
+  /* ================= หน้าเมนูหลัก ================= */
+  .wrap{max-width:1000px; margin:0 auto; padding:28px 20px 60px;}
+  .hero{text-align:center; color:#fff; padding:18px 0 24px;}
+  .hero h1{font-size:clamp(30px,6vw,52px); margin:0; font-weight:800; text-shadow:0 4px 14px rgba(0,0,0,.25);}
+  .hero p{font-size:clamp(15px,3vw,20px); opacity:.92; margin:8px 0 0;}
+  .hero .emoji{font-size:clamp(40px,9vw,72px); display:block; margin-bottom:6px;}
+
+  .toolbar{display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin:6px 0 22px;}
+
+  .sets{display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:18px;}
+  .set-card{
+    background:#fff; border-radius:var(--radius); padding:18px; box-shadow:var(--shadow);
+    display:flex; flex-direction:column; gap:12px; position:relative; overflow:hidden;
+  }
+  .set-card::before{content:""; position:absolute; inset:0 0 auto 0; height:8px; background:linear-gradient(90deg,var(--pink),var(--purple),var(--bg3));}
+  .set-card h3{margin:6px 0 0; font-size:22px;}
+  .set-meta{color:var(--muted); font-size:14px;}
+  .set-card .row{display:flex; gap:8px; flex-wrap:wrap; margin-top:auto;}
+  .empty{color:#fff; text-align:center; opacity:.9; padding:40px; font-size:18px;}
+
+  /* ================= หน้าแก้ไข (Teacher) ================= */
+  .ed-head{
+    position:sticky; top:0; z-index:5; background:rgba(109,40,217,.96); backdrop-filter:blur(6px);
+    color:#fff; padding:14px 18px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  }
+  .ed-head h2{margin:0; font-size:20px; flex:1;}
+  .panel{background:#fff; border-radius:var(--radius); padding:18px; box-shadow:var(--shadow); margin-bottom:18px;}
+  .field{display:flex; flex-direction:column; gap:6px; margin-bottom:14px;}
+  .field label{font-weight:600; font-size:15px; color:var(--ink);}
+  .field input[type=text], .field input[type=number], .field textarea{
+    border:2px solid #e2e8f0; border-radius:14px; padding:12px 14px; font-size:16px; outline:none; transition:border .15s;
+  }
+  .field input:focus, .field textarea:focus{border-color:var(--purple);}
+  .grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px;}
+  .switch{display:flex; align-items:center; gap:8px; font-size:15px;}
+  .q-card{border:2px dashed #cbd5e1; border-radius:18px; padding:16px; margin-bottom:16px; background:#fafafa;}
+  .q-card h4{margin:0 0 10px; font-size:18px; display:flex; align-items:center; gap:10px;}
+  .q-card h4 .num{background:var(--purple); color:#fff; border-radius:999px; width:30px; height:30px; display:grid; place-items:center; font-size:15px;}
+  .opts{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-top:6px;}
+  .opt-card{border:2px solid #e2e8f0; border-radius:14px; padding:12px; background:#fff; position:relative;}
+  .opt-card.correct{border-color:var(--good); box-shadow:0 0 0 3px rgba(34,197,94,.18);}
+  .opt-top{display:flex; align-items:center; gap:8px; margin-bottom:8px;}
+  .opt-top .correct-pick{display:flex; align-items:center; gap:6px; font-size:14px; font-weight:600; color:var(--good);}
+  .img-pick{display:flex; align-items:center; gap:10px; margin-top:6px;}
+  .img-pick .thumb{width:56px; height:56px; border-radius:12px; object-fit:cover; border:1px solid #e2e8f0; background:#f1f5f9;}
+  .file-btn{font-size:14px; padding:8px 12px; border-radius:10px; background:#eef2ff; color:#4338ca; font-weight:600;}
+  .mini{font-size:13px; color:var(--muted);}
+  .hint{font-size:13px; color:var(--muted); margin-top:-6px;}
+
+  /* ================= หน้าเล่น (Play) ================= */
+  #screen-play{background:#000;}
+  #video{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); /* mirror */}
+  #bgCanvas,#fxCanvas{position:absolute; inset:0; width:100%; height:100%; pointer-events:none;}
+  #bgCanvas{z-index:2;}            /* โครงมือวาดบนนี้ */
+  #optionLayer{position:absolute; inset:0; z-index:3;}  /* การ์ดตัวเลือก (DOM) */
+  #fxCanvas{z-index:4;}            /* เคอร์เซอร์ปลายนิ้ว + วงแหวน dwell */
+
+  /* HUD */
+  .hud{position:absolute; z-index:5; color:#fff; pointer-events:none; text-shadow:0 2px 8px rgba(0,0,0,.5);}
+  #hudScore{top:14px; left:16px; font-size:clamp(20px,3.4vw,34px); font-weight:800;
+    background:rgba(0,0,0,.35); padding:8px 18px; border-radius:999px; backdrop-filter:blur(4px);}
+  #hudScore small{font-size:.55em; opacity:.85; font-weight:500;}
+  #hudTimer{top:14px; right:16px; font-size:clamp(22px,4vw,40px); font-weight:800;
+    background:rgba(0,0,0,.35); width:clamp(64px,11vw,96px); height:clamp(64px,11vw,96px);
+    border-radius:50%; display:grid; place-items:center; backdrop-filter:blur(4px);}
+  #hudTimer.low{background:rgba(239,68,68,.65); animation:pulse .6s infinite;}
+  @keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.08);}}
+
+  #hudProgress{top:78px; left:16px; font-size:14px; background:rgba(0,0,0,.3); padding:4px 12px; border-radius:999px;}
+
+  .prompt{position:absolute; top:80px; left:50%; transform:translateX(-50%); z-index:5;
+    max-width:min(92vw,720px); text-align:center; pointer-events:none;}
+  .prompt .box{background:rgba(255,255,255,.86); border-radius:22px; padding:14px 26px; box-shadow:var(--shadow); backdrop-filter:blur(4px);}
+  .prompt .ptext{font-size:clamp(22px,4.4vw,40px); font-weight:800; color:#1e293b; line-height:1.2;}
+  .prompt img{max-height:22vh; max-width:80%; margin-top:10px; border-radius:14px;}
+
+  /* การ์ดตัวเลือกแบบลอย */
+  .opt{
+    position:absolute; background:rgba(255,255,255,.92); border-radius:26px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+    box-shadow:0 8px 24px rgba(0,0,0,.35); border:5px solid rgba(255,255,255,.6);
+    overflow:hidden; transition:transform .15s ease, box-shadow .15s, border-color .2s;
+    padding:10px;
+  }
+  .opt .otext{font-size:clamp(20px,3.2vw,40px); font-weight:800; color:#1e293b; text-align:center; line-height:1.15;}
+  .opt img{max-width:88%; max-height:62%; object-fit:contain;}
+  .opt.hover{transform:scale(1.06); border-color:#fde68a;}
+  .opt.correct-flash{border-color:var(--good); box-shadow:0 0 0 8px rgba(34,197,94,.5), 0 8px 30px rgba(0,0,0,.4); animation:bounce .5s;}
+  .opt.wrong-flash{border-color:var(--bad); box-shadow:0 0 0 8px rgba(239,68,68,.5); animation:shake .4s;}
+  .opt.reveal{border-color:var(--good); box-shadow:0 0 0 6px rgba(34,197,94,.45);}
+  @keyframes bounce{0%{transform:scale(1);}40%{transform:scale(1.2);}100%{transform:scale(1.06);}}
+  @keyframes shake{0%,100%{transform:translateX(0);}20%{transform:translateX(-10px);}40%{transform:translateX(10px);}60%{transform:translateX(-7px);}80%{transform:translateX(7px);}}
+
+  /* ป้ายคะแนนเด้ง */
+  .floatScore{position:absolute; z-index:7; font-size:clamp(30px,6vw,64px); font-weight:800; pointer-events:none;
+    color:var(--good); text-shadow:0 3px 10px rgba(0,0,0,.4); animation:floatUp 1.1s ease forwards;}
+  @keyframes floatUp{0%{opacity:0; transform:translate(-50%,0) scale(.6);}20%{opacity:1; transform:translate(-50%,-10px) scale(1.1);}100%{opacity:0; transform:translate(-50%,-120px) scale(1);}}
+
+  .verdict{position:absolute; inset:0; z-index:6; display:grid; place-items:center; pointer-events:none;}
+  .verdict span{font-size:clamp(80px,24vw,260px); filter:drop-shadow(0 6px 20px rgba(0,0,0,.5)); animation:pop .5s ease;}
+  @keyframes pop{0%{transform:scale(0); opacity:0;}60%{transform:scale(1.25);}100%{transform:scale(1); opacity:1;}}
+
+  .play-exit{position:absolute; bottom:18px; left:50%; transform:translateX(-50%); z-index:8;}
+
+  .cam-status{position:absolute; inset:0; z-index:9; display:grid; place-items:center; color:#fff; text-align:center; padding:24px; background:rgba(0,0,0,.6);}
+  .cam-status .card{background:#fff; color:var(--ink); border-radius:22px; padding:28px; max-width:420px; box-shadow:var(--shadow);}
+  .cam-status h3{margin:0 0 8px; font-size:24px;}
+  .spinner{width:46px; height:46px; border:5px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 14px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* ================= หน้าสรุปผล ================= */
+  #screen-results .wrap{display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100%; text-align:center; color:#fff;}
+  .result-card{background:#fff; color:var(--ink); border-radius:28px; padding:34px 30px; box-shadow:var(--shadow); max-width:480px; width:100%;}
+  .result-card .big{font-size:64px; margin:0;}
+  .stars{font-size:48px; letter-spacing:6px; margin:8px 0;}
+  .scoreline{font-size:46px; font-weight:800; color:var(--purple); margin:10px 0;}
+  .result-card .row{display:flex; gap:12px; justify-content:center; margin-top:20px; flex-wrap:wrap;}
+
+  .toast{position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:50;
+    background:#1e293b; color:#fff; padding:14px 22px; border-radius:999px; box-shadow:var(--shadow);
+    font-size:15px; opacity:0; transition:opacity .25s, transform .25s;}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(-4px);}
+
+  @media (max-width:520px){
+    .opt .otext{font-size:22px;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ===================== หน้าเมนูหลัก ===================== -->
+<div id="screen-menu" class="screen active">
+  <div class="wrap">
+    <div class="hero">
+      <span class="emoji">🖐️✨</span>
+      <h1>เกมมือวิเศษ ตอบคำถาม</h1>
+      <p>ยกมือ เอื้อมไปแตะคำตอบ ค้างไว้จนวงแหวนเต็ม! 🎯</p>
+    </div>
+    <div class="toolbar">
+      <button class="btn primary" id="btnNewSet">➕ สร้างชุดข้อสอบ</button>
+      <button class="btn blue" id="btnImport">📥 นำเข้า JSON</button>
+      <input type="file" id="importFile" accept="application/json" hidden />
+    </div>
+    <div id="setList" class="sets"></div>
+  </div>
+</div>
+
+<!-- ===================== หน้าแก้ไข (ครู) ===================== -->
+<div id="screen-editor" class="screen">
+  <div class="ed-head">
+    <button class="btn ghost sm" id="btnEdBack">← กลับ</button>
+    <h2 id="edTitle">สร้างชุดข้อสอบ</h2>
+    <button class="btn green sm" id="btnEdSave">💾 บันทึก</button>
+  </div>
+  <div class="wrap" style="padding-top:18px;">
+    <div class="panel">
+      <div class="field">
+        <label>ชื่อชุดข้อสอบ</label>
+        <input type="text" id="edName" placeholder="เช่น เรียนรู้เรื่องสี" />
+      </div>
+      <div class="grid2">
+        <div class="field"><label>เวลาต่อข้อ (วินาที)</label><input type="number" id="edTime" min="5" max="120" value="20" /></div>
+        <div class="field"><label>คะแนนต่อข้อ</label><input type="number" id="edScore" min="1" max="100" value="10" /></div>
+        <div class="field"><label>เวลาค้างมือ dwell (วินาที)</label><input type="number" id="edDwell" min="0.5" max="5" step="0.1" value="1.2" /></div>
+        <div class="field"><label>หักคะแนนเมื่อผิด</label><input type="number" id="edPenalty" min="0" max="50" value="0" /></div>
+      </div>
+      <div class="grid2" style="margin-top:4px;">
+        <label class="switch"><input type="checkbox" id="edShuffle" checked /> สลับลำดับข้อ/ตัวเลือก</label>
+        <div class="field" style="margin:0;">
+          <label>วิธีเลือกคำตอบ</label>
+          <select id="edMode" style="border:2px solid #e2e8f0; border-radius:14px; padding:12px;">
+            <option value="dwell">ค้างมือ (Dwell) — แนะนำ</option>
+            <option value="pinch">หนีบนิ้ว (Pinch)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div id="qList"></div>
+    <button class="btn blue" id="btnAddQ" style="width:100%; margin-bottom:40px;">➕ เพิ่มคำถาม</button>
+  </div>
+</div>
+
+<!-- ===================== หน้าเล่น ===================== -->
+<div id="screen-play" class="screen">
+  <video id="video" playsinline muted></video>
+  <canvas id="bgCanvas"></canvas>
+  <div id="optionLayer"></div>
+  <canvas id="fxCanvas"></canvas>
+
+  <div class="hud" id="hudScore">⭐ <span id="scoreVal">0</span> <small>คะแนน</small></div>
+  <div class="hud" id="hudTimer"><span id="timerVal">20</span></div>
+  <div class="hud" id="hudProgress">ข้อ <span id="qNow">1</span>/<span id="qTotal">1</span></div>
+
+  <div class="prompt" id="promptBox">
+    <div class="box">
+      <div class="ptext" id="promptText"></div>
+      <img id="promptImg" hidden alt="โจทย์" />
+    </div>
+  </div>
+
+  <div class="verdict" id="verdict" hidden><span id="verdictMark"></span></div>
+
+  <button class="btn danger play-exit" id="btnExitPlay">⏹ ออก</button>
+
+  <div class="cam-status" id="camStatus">
+    <div class="card">
+      <div class="spinner"></div>
+      <h3 id="camTitle">กำลังเปิดกล้อง…</h3>
+      <p id="camMsg" class="mini">กรุณาอนุญาตให้ใช้กล้อง แล้วยกมือขึ้นมาให้กล้องเห็น 🖐️</p>
+      <div id="camActions" style="margin-top:12px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== หน้าสรุปผล ===================== -->
+<div id="screen-results" class="screen">
+  <div class="wrap">
+    <div class="result-card">
+      <p class="big" id="resEmoji">🎉</p>
+      <h2 id="resTitle" style="margin:0;">เก่งมาก!</h2>
+      <div class="stars" id="resStars">⭐⭐⭐</div>
+      <div class="scoreline"><span id="resScore">0</span> คะแนน</div>
+      <p style="font-size:20px; color:var(--muted); margin:0;">ตอบถูก <b id="resCorrect">0</b> จาก <b id="resTotal">0</b> ข้อ</p>
+      <div class="row">
+        <button class="btn green" id="btnReplay">🔁 เล่นอีกครั้ง</button>
+        <button class="btn ghost" id="btnHome" style="color:var(--ink); border-color:#cbd5e1;">🏠 กลับเมนู</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ===================== MediaPipe Hands (CDN) =====================
+  เลือกใช้ @mediapipe/hands รุ่นคลาสสิก + camera_utils เพราะเสถียร
+  ติดตั้งง่าย และทำงานได้ดีบน Chrome/Edge สำหรับงานเด็กเล็ก -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+<script>
+/* ============================================================
+   1) เครื่องมือพื้นฐาน + การเก็บข้อมูล (localStorage)
+   ============================================================ */
+const $ = (s,el=document)=>el.querySelector(s);
+const $$ = (s,el=document)=>[...el.querySelectorAll(s)];
+const uid = ()=> 'id_' + Math.random().toString(36).slice(2,9);
+const STORE_KEY = 'handQuizData_v1';
+
+let DB = { quizSets: [] };
+
+function loadDB(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw){ DB = JSON.parse(raw); }
+    else { DB = { quizSets: sampleSets() }; saveDB(); }
+  }catch(e){
+    console.warn('โหลดข้อมูลไม่ได้ ใช้ตัวอย่างแทน', e);
+    DB = { quizSets: sampleSets() };
+  }
+  if(!DB.quizSets) DB.quizSets = [];
+}
+function saveDB(){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(DB)); }
+  catch(e){ toast('บันทึกไม่สำเร็จ (พื้นที่อาจเต็ม)'); console.error(e); }
+}
+
+/* ---------- ข้อมูลตัวอย่าง 3 ชุด (กดเล่นได้ทันที) ---------- */
+function sampleSets(){
+  return [
+    {
+      id:'set_color', name:'สีสันสดใส 🌈',
+      settings:{ timePerQuestion:20, scorePerQuestion:10, dwellTime:1.2, shuffle:true, penalty:0, selectMode:'dwell' },
+      questions:[
+        { id:uid(), promptText:'แตะ สีแดง 🔴', promptImage:null, options:[
+          {id:uid(), text:'🔴', image:null, correct:true},
+          {id:uid(), text:'🔵', image:null, correct:false},
+          {id:uid(), text:'🟡', image:null, correct:false},
+        ]},
+        { id:uid(), promptText:'แตะ สีเขียว', promptImage:null, options:[
+          {id:uid(), text:'🟢', image:null, correct:true},
+          {id:uid(), text:'🟣', image:null, correct:false},
+        ]},
+        { id:uid(), promptText:'แตะ สีเหลือง', promptImage:null, options:[
+          {id:uid(), text:'🟠', image:null, correct:false},
+          {id:uid(), text:'🟡', image:null, correct:true},
+          {id:uid(), text:'⚫', image:null, correct:false},
+          {id:uid(), text:'🔵', image:null, correct:false},
+        ]},
+      ]
+    },
+    {
+      id:'set_fruit', name:'ผลไม้แสนอร่อย 🍎',
+      settings:{ timePerQuestion:20, scorePerQuestion:10, dwellTime:1.2, shuffle:true, penalty:0, selectMode:'dwell' },
+      questions:[
+        { id:uid(), promptText:'แตะ กล้วย', promptImage:null, options:[
+          {id:uid(), text:'🍌', image:null, correct:true},
+          {id:uid(), text:'🍓', image:null, correct:false},
+        ]},
+        { id:uid(), promptText:'แตะ แอปเปิ้ล 🍎', promptImage:null, options:[
+          {id:uid(), text:'🍇', image:null, correct:false},
+          {id:uid(), text:'🍎', image:null, correct:true},
+          {id:uid(), text:'🍉', image:null, correct:false},
+        ]},
+        { id:uid(), promptText:'แตะ ส้ม', promptImage:null, options:[
+          {id:uid(), text:'🍊', image:null, correct:true},
+          {id:uid(), text:'🍐', image:null, correct:false},
+          {id:uid(), text:'🥝', image:null, correct:false},
+        ]},
+      ]
+    },
+    {
+      id:'set_count', name:'นับเลขกันเถอะ 🔢',
+      settings:{ timePerQuestion:25, scorePerQuestion:10, dwellTime:1.3, shuffle:false, penalty:0, selectMode:'dwell' },
+      questions:[
+        { id:uid(), promptText:'มีกล้วยกี่ผล? 🍌🍌🍌', promptImage:null, options:[
+          {id:uid(), text:'2', image:null, correct:false},
+          {id:uid(), text:'3', image:null, correct:true},
+          {id:uid(), text:'4', image:null, correct:false},
+        ]},
+        { id:uid(), promptText:'มีดาวกี่ดวง? ⭐⭐', promptImage:null, options:[
+          {id:uid(), text:'1', image:null, correct:false},
+          {id:uid(), text:'2', image:null, correct:true},
+        ]},
+        { id:uid(), promptText:'นับนิ้ว ✋ มีกี่นิ้ว?', promptImage:null, options:[
+          {id:uid(), text:'4', image:null, correct:false},
+          {id:uid(), text:'5', image:null, correct:true},
+          {id:uid(), text:'6', image:null, correct:false},
+        ]},
+      ]
+    }
+  ];
+}
+
+/* ============================================================
+   2) สลับหน้าจอ
+   ============================================================ */
+function showScreen(id){
+  $$('.screen').forEach(s=> s.classList.remove('active'));
+  $('#'+id).classList.add('active');
+}
+
+/* ============================================================
+   3) หน้าเมนูหลัก — แสดงรายการชุดข้อสอบ
+   ============================================================ */
+function renderMenu(){
+  const list = $('#setList');
+  list.innerHTML = '';
+  if(DB.quizSets.length === 0){
+    list.innerHTML = '<div class="empty">ยังไม่มีชุดข้อสอบ — กด “สร้างชุดข้อสอบ” เพื่อเริ่มได้เลย 🎈</div>';
+    return;
+  }
+  DB.quizSets.forEach(set=>{
+    const card = document.createElement('div');
+    card.className = 'set-card';
+    card.innerHTML = `
+      <h3>${escapeHtml(set.name||'(ไม่มีชื่อ)')}</h3>
+      <div class="set-meta">📝 ${set.questions.length} คำถาม • ⏱ ${set.settings.timePerQuestion}s/ข้อ</div>
+      <div class="row">
+        <button class="btn green sm" data-act="play">▶ เริ่มเล่น</button>
+        <button class="btn blue sm" data-act="edit">✏️ แก้ไข</button>
+        <button class="btn sm" data-act="export">📤</button>
+        <button class="btn danger sm" data-act="del">🗑</button>
+      </div>`;
+    card.querySelector('[data-act=play]').onclick = ()=> startPlay(set);
+    card.querySelector('[data-act=edit]').onclick = ()=> openEditor(set);
+    card.querySelector('[data-act=export]').onclick = ()=> exportSet(set);
+    card.querySelector('[data-act=del]').onclick = ()=>{
+      if(confirm('ลบชุด "'+set.name+'" ?')){
+        DB.quizSets = DB.quizSets.filter(s=> s.id!==set.id);
+        saveDB(); renderMenu();
+      }
+    };
+    list.appendChild(card);
+  });
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ============================================================
+   4) Export / Import JSON
+   ============================================================ */
+function exportSet(set){
+  const blob = new Blob([JSON.stringify(set,null,2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (set.name||'quiz').replace(/[^\w฀-๿-]+/g,'_') + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+$('#btnImport').onclick = ()=> $('#importFile').click();
+$('#importFile').onchange = async (e)=>{
+  const file = e.target.files[0]; if(!file) return;
+  try{
+    const obj = JSON.parse(await file.text());
+    const sets = Array.isArray(obj?.quizSets) ? obj.quizSets : (obj?.questions ? [obj] : null);
+    if(!sets) throw new Error('รูปแบบไฟล์ไม่ถูกต้อง');
+    sets.forEach(s=>{ s.id = uid(); DB.quizSets.push(normalizeSet(s)); });
+    saveDB(); renderMenu(); toast('นำเข้าสำเร็จ ✓');
+  }catch(err){ alert('นำเข้าไม่สำเร็จ: '+err.message); }
+  e.target.value='';
+};
+// เติมค่า default ที่อาจขาดหายให้ชุดที่นำเข้า
+function normalizeSet(s){
+  s.settings = Object.assign({ timePerQuestion:20, scorePerQuestion:10, dwellTime:1.2, shuffle:true, penalty:0, selectMode:'dwell' }, s.settings||{});
+  s.questions = (s.questions||[]).map(q=>({
+    id: q.id||uid(), promptText:q.promptText||'', promptImage:q.promptImage||null,
+    options:(q.options||[]).map(o=>({ id:o.id||uid(), text:o.text||'', image:o.image||null, correct:!!o.correct }))
+  }));
+  return s;
+}
+
+/* ============================================================
+   5) หน้าแก้ไข (Teacher)
+   ============================================================ */
+let editing = null;        // ชุดที่กำลังแก้ (working copy)
+let editingExistingId = null;
+
+function blankOption(){ return { id:uid(), text:'', image:null, correct:false }; }
+function blankQuestion(){ return { id:uid(), promptText:'', promptImage:null, options:[blankOption(), blankOption()] }; }
+function blankSet(){
+  return { id:uid(), name:'', settings:{ timePerQuestion:20, scorePerQuestion:10, dwellTime:1.2, shuffle:true, penalty:0, selectMode:'dwell' }, questions:[ blankQuestion() ] };
+}
+
+$('#btnNewSet').onclick = ()=> openEditor(null);
+
+function openEditor(set){
+  editing = set ? JSON.parse(JSON.stringify(set)) : blankSet();
+  editingExistingId = set ? set.id : null;
+  $('#edTitle').textContent = set ? 'แก้ไขชุดข้อสอบ' : 'สร้างชุดข้อสอบ';
+  // เติมค่าการตั้งค่าลงฟอร์ม
+  $('#edName').value = editing.name||'';
+  $('#edTime').value = editing.settings.timePerQuestion;
+  $('#edScore').value = editing.settings.scorePerQuestion;
+  $('#edDwell').value = editing.settings.dwellTime;
+  $('#edPenalty').value = editing.settings.penalty;
+  $('#edShuffle').checked = !!editing.settings.shuffle;
+  $('#edMode').value = editing.settings.selectMode||'dwell';
+  renderQuestions();
+  showScreen('screen-editor');
+}
+
+// วาดรายการคำถาม (re-render เมื่อมีการเพิ่ม/ลบ; การพิมพ์ข้อความผูกตรงกับ model ไม่ต้อง re-render)
+function renderQuestions(){
+  const wrap = $('#qList');
+  wrap.innerHTML = '';
+  editing.questions.forEach((q, qi)=>{
+    const card = document.createElement('div');
+    card.className = 'q-card';
+    card.innerHTML = `
+      <h4><span class="num">${qi+1}</span> คำถามที่ ${qi+1}
+        <button class="btn danger sm" style="margin-left:auto;" data-act="delQ">🗑 ลบข้อ</button>
+      </h4>
+      <div class="field">
+        <label>โจทย์ (ข้อความ)</label>
+        <input type="text" data-f="promptText" placeholder="เช่น แตะคำว่า สีม่วง" />
+      </div>
+      <div class="field">
+        <label>รูปประกอบโจทย์ (ไม่บังคับ)</label>
+        <div class="img-pick">
+          <img class="thumb" data-thumb="prompt" />
+          <button class="btn file-btn" data-act="promptImg">📷 เลือกรูป</button>
+          <button class="btn sm" data-act="promptImgClear">ลบรูป</button>
+        </div>
+      </div>
+      <label style="font-weight:600;">ตัวเลือก (2–4 ข้อ • เลือกข้อที่ถูก)</label>
+      <div class="opts" data-opts></div>
+      <button class="btn blue sm" data-act="addOpt" style="margin-top:10px;">➕ เพิ่มตัวเลือก</button>
+    `;
+    // bind โจทย์
+    const ptext = card.querySelector('[data-f=promptText]');
+    ptext.value = q.promptText||'';
+    ptext.oninput = ()=> q.promptText = ptext.value;
+    const thumb = card.querySelector('[data-thumb=prompt]');
+    thumb.src = q.promptImage || transparentPx();
+    thumb.style.display = q.promptImage ? '' : 'none';
+    card.querySelector('[data-act=promptImg]').onclick = ()=> pickImage(dataUrl=>{ q.promptImage=dataUrl; renderQuestions(); });
+    card.querySelector('[data-act=promptImgClear]').onclick = ()=>{ q.promptImage=null; renderQuestions(); };
+    card.querySelector('[data-act=delQ]').onclick = ()=>{
+      if(editing.questions.length<=1){ toast('ต้องมีอย่างน้อย 1 ข้อ'); return; }
+      editing.questions.splice(qi,1); renderQuestions();
+    };
+    card.querySelector('[data-act=addOpt]').onclick = ()=>{
+      if(q.options.length>=4){ toast('ได้สูงสุด 4 ตัวเลือก'); return; }
+      q.options.push(blankOption()); renderQuestions();
+    };
+
+    // วาดตัวเลือก
+    const optsWrap = card.querySelector('[data-opts]');
+    q.options.forEach((o, oi)=>{
+      const oc = document.createElement('div');
+      oc.className = 'opt-card' + (o.correct?' correct':'');
+      oc.innerHTML = `
+        <div class="opt-top">
+          <label class="correct-pick"><input type="radio" name="correct_${q.id}" ${o.correct?'checked':''}/> ✓ ข้อถูก</label>
+          <button class="btn danger sm" style="margin-left:auto; padding:4px 10px;" data-act="delOpt">✕</button>
+        </div>
+        <input type="text" data-f="otext" placeholder="ข้อความ (ใส่ emoji ได้)" style="width:100%; border:2px solid #e2e8f0; border-radius:10px; padding:8px;"/>
+        <div class="img-pick">
+          <img class="thumb" data-thumb="opt" />
+          <button class="btn file-btn" data-act="optImg">📷 รูป</button>
+          <button class="btn sm" data-act="optImgClear">ลบ</button>
+        </div>
+        <div class="mini">* ใส่ข้อความหรือรูป อย่างน้อย 1 อย่าง</div>`;
+      const otext = oc.querySelector('[data-f=otext]');
+      otext.value = o.text||'';
+      otext.oninput = ()=> o.text = otext.value;
+      const oth = oc.querySelector('[data-thumb=opt]');
+      oth.src = o.image || transparentPx();
+      oth.style.display = o.image ? '' : 'none';
+      oc.querySelector('input[type=radio]').onchange = ()=>{
+        q.options.forEach(x=> x.correct=false); o.correct=true; renderQuestions();
+      };
+      oc.querySelector('[data-act=optImg]').onclick = ()=> pickImage(d=>{ o.image=d; renderQuestions(); });
+      oc.querySelector('[data-act=optImgClear]').onclick = ()=>{ o.image=null; renderQuestions(); };
+      oc.querySelector('[data-act=delOpt]').onclick = ()=>{
+        if(q.options.length<=2){ toast('ต้องมีอย่างน้อย 2 ตัวเลือก'); return; }
+        q.options.splice(oi,1); renderQuestions();
+      };
+      optsWrap.appendChild(oc);
+    });
+
+    wrap.appendChild(card);
+  });
+}
+function transparentPx(){ return 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='; }
+
+$('#btnAddQ').onclick = ()=>{ editing.questions.push(blankQuestion()); renderQuestions(); window.scrollTo(0,document.body.scrollHeight); };
+$('#btnEdBack').onclick = ()=>{ if(confirm('ออกโดยไม่บันทึก?')){ showScreen('screen-menu'); } };
+
+$('#btnEdSave').onclick = ()=>{
+  // อ่านค่าการตั้งค่ากลับเข้า model
+  editing.name = $('#edName').value.trim();
+  editing.settings.timePerQuestion = clampNum($('#edTime').value, 5, 120, 20);
+  editing.settings.scorePerQuestion = clampNum($('#edScore').value, 1, 100, 10);
+  editing.settings.dwellTime = clampNum($('#edDwell').value, 0.5, 5, 1.2);
+  editing.settings.penalty = clampNum($('#edPenalty').value, 0, 50, 0);
+  editing.settings.shuffle = $('#edShuffle').checked;
+  editing.settings.selectMode = $('#edMode').value;
+
+  // ตรวจความถูกต้อง
+  const err = validateSet(editing);
+  if(err){ alert(err); return; }
+
+  if(editingExistingId){
+    const i = DB.quizSets.findIndex(s=> s.id===editingExistingId);
+    if(i>=0) DB.quizSets[i] = editing; else DB.quizSets.push(editing);
+  }else{
+    DB.quizSets.push(editing);
+  }
+  saveDB(); renderMenu(); showScreen('screen-menu'); toast('บันทึกแล้ว ✓');
+};
+function clampNum(v,min,max,def){ v=parseFloat(v); if(isNaN(v)) return def; return Math.min(max,Math.max(min,v)); }
+function validateSet(s){
+  if(!s.name) return 'กรุณาตั้งชื่อชุดข้อสอบ';
+  if(!s.questions.length) return 'ต้องมีอย่างน้อย 1 คำถาม';
+  for(let i=0;i<s.questions.length;i++){
+    const q = s.questions[i];
+    if(!q.promptText.trim() && !q.promptImage) return `คำถามที่ ${i+1}: ต้องมีข้อความหรือรูปโจทย์`;
+    if(q.options.length<2) return `คำถามที่ ${i+1}: ต้องมีอย่างน้อย 2 ตัวเลือก`;
+    for(let j=0;j<q.options.length;j++){
+      const o=q.options[j];
+      if(!o.text.trim() && !o.image) return `คำถามที่ ${i+1} ตัวเลือกที่ ${j+1}: ต้องมีข้อความหรือรูป`;
+    }
+    if(!q.options.some(o=>o.correct)) return `คำถามที่ ${i+1}: กรุณาเลือกคำตอบที่ถูก`;
+  }
+  return null;
+}
+
+/* ---------- เลือก+ย่อรูป → base64 dataURL (ด้านยาวสุด ≤ 512px) ---------- */
+function pickImage(cb){
+  const inp = document.createElement('input');
+  inp.type='file'; inp.accept='image/*';
+  inp.onchange = ()=>{
+    const file = inp.files[0]; if(!file) return;
+    const img = new Image();
+    img.onload = ()=>{
+      const MAX=512;
+      let {width:w, height:h} = img;
+      if(w>h && w>MAX){ h=Math.round(h*MAX/w); w=MAX; }
+      else if(h>=w && h>MAX){ w=Math.round(w*MAX/h); h=MAX; }
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      cb(c.toDataURL('image/jpeg',0.82));
+    };
+    img.onerror = ()=> toast('โหลดรูปไม่ได้');
+    img.src = URL.createObjectURL(file);
+  };
+  inp.click();
+}
+
+/* ============================================================
+   6) เครื่องเล่น (Play) — กล้อง + MediaPipe Hands + dwell
+   ============================================================ */
+const HAND_CONNECTIONS = [
+  [0,1],[1,2],[2,3],[3,4],          // นิ้วโป้ง
+  [0,5],[5,6],[6,7],[7,8],          // นิ้วชี้
+  [5,9],[9,10],[10,11],[11,12],     // นิ้วกลาง
+  [9,13],[13,14],[14,15],[15,16],   // นิ้วนาง
+  [13,17],[17,18],[18,19],[19,20],  // นิ้วก้อย
+  [0,17]
+];
+
+// สถานะการเล่น
+let play = null;          // { set, queue, qIndex, score, correctCount, locked }
+let hands = null, camera = null, handsReady = false;
+let latestHand = null, latestHandTime = 0;
+let dwellIndex = -1, dwellAccum = 0;
+let lastTs = 0, rafId = 0;
+let questionTimer = null, timeLeft = 0;
+let optionRects = [];     // เก็บ DOM element ของตัวเลือก
+let audioCtx = null;
+
+const video = $('#video');
+const bgCanvas = $('#bgCanvas'), bgCtx = bgCanvas.getContext('2d');
+const fxCanvas = $('#fxCanvas'), fxCtx = fxCanvas.getContext('2d');
+
+function resizeCanvases(){
+  [bgCanvas, fxCanvas].forEach(c=>{ c.width = window.innerWidth; c.height = window.innerHeight; });
+}
+window.addEventListener('resize', resizeCanvases);
+
+/* ---------- เริ่มเล่นชุดที่เลือก ---------- */
+async function startPlay(set){
+  if(!set.questions.length){ toast('ชุดนี้ยังไม่มีคำถาม'); return; }
+  play = {
+    set,
+    queue: buildQueue(set),
+    qIndex: 0,
+    score: 0,
+    correctCount: 0,
+    locked: true,
+  };
+  showScreen('screen-play');
+  resizeCanvases();
+  $('#scoreVal').textContent = '0';
+  $('#qTotal').textContent = play.queue.length;
+  setCamStatus(true, 'กำลังเปิดกล้อง…', 'กรุณาอนุญาตให้ใช้กล้อง แล้วยกมือขึ้นมาให้กล้องเห็น 🖐️');
+
+  try{
+    await initHands();           // โหลดโมเดล (ครั้งแรกเท่านั้น)
+    await initCamera();          // ขอกล้อง
+    setCamStatus(false);
+    renderCurrentQuestion();     // เริ่มข้อแรก
+    startLoop();
+  }catch(err){
+    console.error(err);
+    setCamStatus(true, 'เปิดกล้องไม่ได้ 😢', cameraErrMsg(err), true);
+  }
+}
+
+// สร้างคิวคำถาม (สลับถ้าตั้งค่าไว้) + สลับตัวเลือกในแต่ละข้อ
+function buildQueue(set){
+  let qs = set.questions.map(q=>({
+    ...q,
+    options: q.options.map(o=>({...o}))
+  }));
+  if(set.settings.shuffle){
+    qs = shuffle(qs);
+    qs.forEach(q=> q.options = shuffle(q.options));
+  }
+  return qs;
+}
+function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+function cameraErrMsg(err){
+  if(err && err.name==='NotAllowedError') return 'คุณยังไม่ได้อนุญาตให้ใช้กล้อง — กรุณากดอนุญาตแล้วลองใหม่';
+  if(err && err.name==='NotFoundError') return 'ไม่พบกล้องบนอุปกรณ์นี้';
+  return 'เกิดข้อผิดพลาด: ' + (err?.message||err);
+}
+
+function setCamStatus(show, title, msg, showRetry){
+  const box = $('#camStatus');
+  box.style.display = show ? '' : 'none';
+  if(title) $('#camTitle').textContent = title;
+  if(msg) $('#camMsg').textContent = msg;
+  $('.spinner').style.display = showRetry ? 'none' : '';
+  const act = $('#camActions'); act.innerHTML='';
+  if(showRetry){
+    const b1 = document.createElement('button'); b1.className='btn primary'; b1.textContent='ลองใหม่';
+    b1.onclick = ()=> startPlay(play.set);
+    const b2 = document.createElement('button'); b2.className='btn ghost'; b2.style.color=getComputedStyle(document.body).color; b2.style.borderColor='#cbd5e1'; b2.textContent='กลับเมนู'; b2.style.marginLeft='8px';
+    b2.onclick = ()=> exitPlay();
+    act.appendChild(b1); act.appendChild(b2);
+  }
+}
+
+/* ---------- โหลด MediaPipe Hands ---------- */
+async function initHands(){
+  if(handsReady) return;
+  if(typeof Hands === 'undefined') throw new Error('โหลดไลบรารี MediaPipe ไม่สำเร็จ (ตรวจอินเทอร์เน็ต)');
+  hands = new Hands({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
+  hands.setOptions({
+    maxNumHands: 2,            // จับได้ 2 มือ แล้วเราเลือกมือที่ชัดสุด
+    modelComplexity: 0,        // เบา = ลื่นบนเครื่องทั่วไป
+    minDetectionConfidence: 0.6,
+    minTrackingConfidence: 0.5
+  });
+  hands.onResults(onHandResults);
+  handsReady = true;
+}
+
+/* ---------- เปิดกล้อง ---------- */
+async function initCamera(){
+  // ใช้ Camera utils ป้อนเฟรมเข้า hands ทุกเฟรม
+  if(camera){ try{ camera.stop(); }catch(e){} camera=null; }
+  // ขอสิทธิ์กล้องก่อน (เพื่อให้ error ชัดเจน)
+  const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user', width:{ideal:1280}, height:{ideal:720} }, audio:false });
+  video.srcObject = stream;
+  await video.play();
+  camera = new Camera(video, {
+    onFrame: async ()=>{ if(handsReady) await hands.send({ image: video }); },
+    width: 1280, height: 720
+  });
+  camera.start();
+}
+
+/* ---------- ผลลัพธ์จาก MediaPipe (เก็บมือที่ดีที่สุดไว้) ---------- */
+function onHandResults(res){
+  if(res.multiHandLandmarks && res.multiHandLandmarks.length){
+    // เลือกมือที่ "ใหญ่สุด" (ใกล้กล้องสุด) จาก bounding box
+    let best=null, bestArea=-1;
+    for(const lm of res.multiHandLandmarks){
+      let minX=1,minY=1,maxX=0,maxY=0;
+      for(const p of lm){ minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x); minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y); }
+      const area=(maxX-minX)*(maxY-minY);
+      if(area>bestArea){ bestArea=area; best=lm; }
+    }
+    latestHand = best;
+    latestHandTime = performance.now();
+  }else{
+    latestHand = null;
+  }
+}
+
+/* ---------- แปลงพิกัด normalized (0–1) → พิกัดจอจริง + mirror แกน X ----------
+   วิดีโอแสดงแบบ object-fit:cover และ mirror (scaleX -1) ด้วย CSS
+   เราจึง mirror x ด้วย (1 - x) และ map ทั้ง x,y ลงขนาดหน้าจอ */
+function toScreen(p){
+  return { x:(1 - p.x) * window.innerWidth, y:p.y * window.innerHeight };
+}
+
+/* ---------- ลูปวาดภาพ + ตรรกะ dwell (rAF) ---------- */
+function startLoop(){
+  lastTs = performance.now();
+  cancelAnimationFrame(rafId);
+  rafId = requestAnimationFrame(gameLoop);
+}
+function gameLoop(ts){
+  const dt = ts - lastTs; lastTs = ts;
+  bgCtx.clearRect(0,0,bgCanvas.width,bgCanvas.height);
+  fxCtx.clearRect(0,0,fxCanvas.width,fxCanvas.height);
+
+  const handFresh = latestHand && (performance.now() - latestHandTime < 350);
+
+  if(handFresh){
+    // 1) วาดโครงมือบน bgCanvas (แปลงเป็นพิกัดจอ + mirror)
+    drawSkeleton(latestHand);
+
+    // 2) ปลายนิ้วชี้ = landmark 8 → เคอร์เซอร์
+    const tip = toScreen(latestHand[8]);
+    drawCursor(tip.x, tip.y);
+
+    if(!play.locked){
+      // 3) ตรวจว่านิ้วอยู่บนตัวเลือกใด
+      const hovered = hitTest(tip.x, tip.y);
+      updateHoverClass(hovered);
+
+      const mode = play.set.settings.selectMode || 'dwell';
+      if(mode === 'pinch'){
+        // โหมดหนีบนิ้ว: ระยะนิ้วโป้ง(4)-ชี้(8) ใกล้กัน ขณะอยู่บนตัวเลือก = เลือก
+        const t4 = toScreen(latestHand[4]);
+        const dist = Math.hypot(t4.x-tip.x, t4.y-tip.y);
+        const pinchThresh = window.innerWidth*0.05;
+        if(hovered>=0){
+          drawHoverHalo(hovered);
+          if(dist < pinchThresh) selectOption(hovered);
+        }
+      }else{
+        // โหมด dwell: ค้างมือบนตัวเลือกจนวงแหวนเต็ม
+        if(hovered>=0){
+          if(hovered===dwellIndex){ dwellAccum += dt; }
+          else { dwellIndex = hovered; dwellAccum = 0; }
+          const dwellMs = (play.set.settings.dwellTime||1.2)*1000;
+          const progress = Math.min(1, dwellAccum/dwellMs);
+          drawDwellRing(hovered, progress);
+          if(progress>=1) selectOption(hovered);
+        }else{
+          dwellIndex=-1; dwellAccum=0;
+        }
+      }
+    }
+  }else{
+    // ไม่เจอมือ → รีเซ็ตการค้าง
+    dwellIndex=-1; dwellAccum=0;
+    updateHoverClass(-1);
+  }
+
+  rafId = requestAnimationFrame(gameLoop);
+}
+
+function drawSkeleton(lm){
+  const pts = lm.map(toScreen);
+  bgCtx.lineWidth = Math.max(3, window.innerWidth*0.004);
+  bgCtx.strokeStyle = 'rgba(124,58,237,0.9)';
+  bgCtx.shadowColor='rgba(124,58,237,0.7)'; bgCtx.shadowBlur=10;
+  for(const [a,b] of HAND_CONNECTIONS){
+    bgCtx.beginPath(); bgCtx.moveTo(pts[a].x,pts[a].y); bgCtx.lineTo(pts[b].x,pts[b].y); bgCtx.stroke();
+  }
+  bgCtx.shadowBlur=0;
+  for(let i=0;i<pts.length;i++){
+    bgCtx.beginPath();
+    bgCtx.fillStyle = (i===8) ? '#f59e0b' : '#fff';
+    bgCtx.arc(pts[i].x, pts[i].y, i===8?9:5, 0, Math.PI*2);
+    bgCtx.fill();
+  }
+}
+
+function drawCursor(x,y){
+  fxCtx.save();
+  // วงเรืองแสงตามปลายนิ้วชี้
+  const grd = fxCtx.createRadialGradient(x,y,2,x,y,26);
+  grd.addColorStop(0,'rgba(255,255,255,0.95)');
+  grd.addColorStop(1,'rgba(245,158,11,0)');
+  fxCtx.fillStyle=grd; fxCtx.beginPath(); fxCtx.arc(x,y,26,0,Math.PI*2); fxCtx.fill();
+  fxCtx.fillStyle='#f59e0b'; fxCtx.beginPath(); fxCtx.arc(x,y,8,0,Math.PI*2); fxCtx.fill();
+  fxCtx.restore();
+}
+
+// วาดวงแหวน progress รอบการ์ดที่ค้างอยู่
+function drawDwellRing(idx, progress){
+  const el = optionRects[idx]; if(!el) return;
+  const r = el.getBoundingClientRect();
+  const cx = r.left + r.width/2, cy = r.top + r.height/2;
+  const rad = Math.max(r.width, r.height)/2 + 18;
+  fxCtx.save();
+  fxCtx.lineWidth = 12;
+  fxCtx.strokeStyle = 'rgba(255,255,255,0.35)';
+  fxCtx.beginPath(); fxCtx.arc(cx,cy,rad,0,Math.PI*2); fxCtx.stroke();
+  fxCtx.strokeStyle = '#22c55e';
+  fxCtx.lineCap='round'; fxCtx.shadowColor='rgba(34,197,94,.8)'; fxCtx.shadowBlur=14;
+  fxCtx.beginPath(); fxCtx.arc(cx,cy,rad,-Math.PI/2, -Math.PI/2 + progress*Math.PI*2); fxCtx.stroke();
+  fxCtx.restore();
+}
+function drawHoverHalo(idx){
+  const el=optionRects[idx]; if(!el) return;
+  const r=el.getBoundingClientRect();
+  const cx=r.left+r.width/2, cy=r.top+r.height/2, rad=Math.max(r.width,r.height)/2+18;
+  fxCtx.save(); fxCtx.lineWidth=10; fxCtx.strokeStyle='rgba(253,224,71,.85)';
+  fxCtx.setLineDash([14,10]); fxCtx.beginPath(); fxCtx.arc(cx,cy,rad,0,Math.PI*2); fxCtx.stroke(); fxCtx.restore();
+}
+
+// ตรวจว่าจุด (x,y) อยู่ในการ์ดตัวเลือกใด (ขยายขอบเล็กน้อยให้เด็กเล็งง่าย)
+function hitTest(x,y){
+  for(let i=0;i<optionRects.length;i++){
+    const r = optionRects[i].getBoundingClientRect();
+    const pad = 14;
+    if(x>=r.left-pad && x<=r.right+pad && y>=r.top-pad && y<=r.bottom+pad) return i;
+  }
+  return -1;
+}
+function updateHoverClass(idx){
+  optionRects.forEach((el,i)=> el.classList.toggle('hover', i===idx && !play.locked));
+}
+
+/* ---------- แสดงคำถามปัจจุบัน + วางตำแหน่งตัวเลือก ---------- */
+function renderCurrentQuestion(){
+  const q = play.queue[play.qIndex];
+  $('#qNow').textContent = play.qIndex+1;
+  // โจทย์
+  $('#promptText').textContent = q.promptText||'';
+  const pimg = $('#promptImg');
+  if(q.promptImage){ pimg.src=q.promptImage; pimg.hidden=false; } else { pimg.hidden=true; }
+
+  // สร้างการ์ดตัวเลือก
+  const layer = $('#optionLayer'); layer.innerHTML=''; optionRects=[];
+  const positions = layoutPositions(q.options.length);
+  q.options.forEach((o,i)=>{
+    const el = document.createElement('div');
+    el.className='opt';
+    const pos = positions[i];
+    el.style.left=pos.left; el.style.top=pos.top; el.style.width=pos.w; el.style.height=pos.h;
+    el.innerHTML = (o.image?`<img src="${o.image}" alt=""/>`:'') + (o.text?`<div class="otext">${escapeHtml(o.text)}</div>`:'');
+    el.dataset.correct = o.correct ? '1':'0';
+    layer.appendChild(el);
+    optionRects.push(el);
+  });
+
+  // เริ่มจับเวลา + ปลดล็อกให้เลือกได้
+  dwellIndex=-1; dwellAccum=0;
+  play.locked=false;
+  startQuestionTimer();
+}
+
+// ตำแหน่งตัวเลือกตามจำนวน (กระจายให้เด็กเอื้อมง่าย ด้านล่างของจอ)
+function layoutPositions(n){
+  const vw=window.innerWidth, vh=window.innerHeight;
+  const size = Math.min(vw,vh) * (n>2 ? 0.30 : 0.36);
+  const w = size+'px', h = size+'px';
+  const pos = [];
+  // place: ใช้ xRatio/yRatio เป็น "จุดกึ่งกลาง" ของการ์ด แล้วหักครึ่งขนาดออก
+  const place = (xRatio,yRatio)=>({
+    left:`calc(${xRatio*100}vw - ${size/2}px)`,
+    top:`calc(${yRatio*100}vh - ${size/2}px)`, w, h
+  });
+  if(n===2){
+    pos.push(place(0.27,0.62), place(0.73,0.62));
+  }else if(n===3){
+    pos.push(place(0.20,0.62), place(0.50,0.62), place(0.80,0.62));
+  }else{ // 4 ตัวเลือก เรียงแบบ 2x2
+    pos.push(place(0.28,0.45), place(0.72,0.45), place(0.28,0.80), place(0.72,0.80));
+  }
+  return pos;
+}
+
+/* ---------- จับเวลา ---------- */
+function startQuestionTimer(){
+  clearInterval(questionTimer);
+  timeLeft = play.set.settings.timePerQuestion;
+  updateTimerHud();
+  questionTimer = setInterval(()=>{
+    timeLeft--;
+    updateTimerHud();
+    if(timeLeft<=0){
+      clearInterval(questionTimer);
+      onTimeout();
+    }
+  }, 1000);
+}
+function updateTimerHud(){
+  $('#timerVal').textContent = Math.max(0,timeLeft);
+  $('#hudTimer').classList.toggle('low', timeLeft<=5);
+}
+
+/* ---------- เลือกคำตอบ ---------- */
+function selectOption(idx){
+  if(play.locked) return;
+  play.locked = true;
+  clearInterval(questionTimer);
+  dwellIndex=-1; dwellAccum=0;
+
+  const q = play.queue[play.qIndex];
+  const opt = q.options[idx];
+  const el = optionRects[idx];
+
+  if(opt.correct){
+    play.score += play.set.settings.scorePerQuestion;
+    play.correctCount++;
+    $('#scoreVal').textContent = play.score;
+    el.classList.add('correct-flash');
+    showVerdict('✅');
+    floatScoreLabel(el, '+'+play.set.settings.scorePerQuestion, true);
+    soundCorrect();
+  }else{
+    const pen = play.set.settings.penalty||0;
+    if(pen>0){ play.score=Math.max(0,play.score-pen); $('#scoreVal').textContent=play.score; }
+    el.classList.add('wrong-flash');
+    showVerdict('❌');
+    if(pen>0) floatScoreLabel(el, '-'+pen, false);
+    // ไฮไลต์คำตอบที่ถูกให้เด็กเห็น
+    optionRects.forEach((o,i)=>{ if(q.options[i].correct) o.classList.add('reveal'); });
+    soundWrong();
+  }
+  // ไปข้อต่อไปหลังโชว์ผล
+  setTimeout(nextQuestion, 1500);
+}
+
+function onTimeout(){
+  if(play.locked) return;
+  play.locked = true;
+  dwellIndex=-1; dwellAccum=0;
+  const q = play.queue[play.qIndex];
+  showVerdict('⏰');
+  optionRects.forEach((o,i)=>{ if(q.options[i].correct) o.classList.add('reveal'); });
+  soundWrong();
+  setTimeout(nextQuestion, 1500);
+}
+
+function nextQuestion(){
+  hideVerdict();
+  play.qIndex++;
+  if(play.qIndex >= play.queue.length){ showResults(); return; }
+  renderCurrentQuestion();
+}
+
+/* ---------- เอฟเฟกต์ถูก/ผิด ---------- */
+function showVerdict(mark){ $('#verdictMark').textContent=mark; $('#verdict').hidden=false; }
+function hideVerdict(){ $('#verdict').hidden=true; }
+function floatScoreLabel(el, text, good){
+  const r = el.getBoundingClientRect();
+  const f = document.createElement('div');
+  f.className='floatScore'; f.textContent=text;
+  f.style.color = good ? 'var(--good)' : 'var(--bad)';
+  f.style.left = (r.left+r.width/2)+'px';
+  f.style.top = (r.top)+'px';
+  document.body.appendChild(f);
+  setTimeout(()=> f.remove(), 1200);
+}
+
+/* ---------- หน้าสรุปผล ---------- */
+function showResults(){
+  stopPlayEngine();
+  const total = play.queue.length, correct=play.correctCount;
+  const ratio = correct/total;
+  let stars = ratio>=0.99?3 : ratio>=0.6?2 : ratio>=0.3?1 : 0;
+  $('#resScore').textContent = play.score;
+  $('#resCorrect').textContent = correct;
+  $('#resTotal').textContent = total;
+  $('#resStars').textContent = '⭐'.repeat(stars) + '☆'.repeat(3-stars);
+  const msg = ratio>=0.99?['🏆','สุดยอดไปเลย!'] : ratio>=0.6?['🎉','เก่งมาก!'] : ratio>=0.3?['😊','พยายามได้ดี!'] : ['💪','ลองอีกครั้งนะ!'];
+  $('#resEmoji').textContent = msg[0];
+  $('#resTitle').textContent = msg[1];
+  if(stars>=2) soundFanfare();
+  showScreen('screen-results');
+}
+
+/* ---------- ออกจากโหมดเล่น / หยุดเครื่องยนต์ ---------- */
+function stopPlayEngine(){
+  cancelAnimationFrame(rafId);
+  clearInterval(questionTimer);
+  bgCtx.clearRect(0,0,bgCanvas.width,bgCanvas.height);
+  fxCtx.clearRect(0,0,fxCanvas.width,fxCanvas.height);
+}
+function exitPlay(){
+  stopPlayEngine();
+  try{ camera && camera.stop(); }catch(e){}
+  // ปิดสตรีมกล้องเพื่อคืนทรัพยากร
+  if(video.srcObject){ video.srcObject.getTracks().forEach(t=>t.stop()); video.srcObject=null; }
+  camera=null;
+  showScreen('screen-menu');
+}
+
+$('#btnExitPlay').onclick = ()=>{ if(confirm('ออกจากเกม?')) exitPlay(); };
+$('#btnReplay').onclick = ()=> startPlay(play.set);
+$('#btnHome').onclick = ()=>{ camera=null; if(video.srcObject){video.srcObject.getTracks().forEach(t=>t.stop()); video.srcObject=null;} showScreen('screen-menu'); };
+
+/* ============================================================
+   7) เสียง (Web Audio API — สังเคราะห์เอง ไม่พึ่งไฟล์)
+   ============================================================ */
+function ac(){ if(!audioCtx){ try{ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return audioCtx; }
+function beep(freq, start, dur, type='sine', vol=0.2){
+  const c=ac(); if(!c) return;
+  const o=c.createOscillator(), g=c.createGain();
+  o.type=type; o.frequency.value=freq;
+  o.connect(g); g.connect(c.destination);
+  const t=c.currentTime+start;
+  g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.start(t); o.stop(t+dur+0.02);
+}
+function soundCorrect(){ beep(660,0,0.12,'sine',0.25); beep(880,0.1,0.15,'sine',0.25); beep(1175,0.22,0.2,'triangle',0.22); }
+function soundWrong(){ beep(311,0,0.18,'sawtooth',0.18); beep(233,0.14,0.28,'sawtooth',0.18); }
+function soundFanfare(){ [523,659,784,1046].forEach((f,i)=> beep(f, i*0.12, 0.22, 'triangle', 0.22)); }
+
+/* ============================================================
+   8) Toast เล็กๆ
+   ============================================================ */
+let toastT=null;
+function toast(msg){
+  const t=$('#toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=> t.classList.remove('show'), 2200);
+}
+
+/* ============================================================
+   9) เริ่มต้นแอป
+   ============================================================ */
+loadDB();
+renderMenu();
+resizeCanvases();
+// ปลดล็อกเสียงเมื่อมีการแตะครั้งแรก (นโยบาย autoplay ของเบราว์เซอร์)
+document.addEventListener('pointerdown', ()=>{ const c=ac(); if(c&&c.state==='suspended') c.resume(); }, {once:true});
+</script>
+</body>
+</html>
