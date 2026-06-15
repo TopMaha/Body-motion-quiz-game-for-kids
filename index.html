@@ -201,6 +201,12 @@
   #hudTimer.low{background:rgba(239,68,68,.7); animation:pulse .6s infinite;}
   @keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.1);}}
   #hudProgress{bottom:78px; left:50%; transform:translateX(-50%); font-size:14px; background:rgba(0,0,0,.4); padding:5px 14px; border-radius:999px; font-weight:600;}
+  /* แถบเวลารวมทั้งเกม (อยู่ขอบบนสุด หดลงเรื่อยๆ) */
+  #totalBar{position:absolute; top:0; left:0; right:0; height:10px; z-index:6; background:rgba(0,0,0,.4); display:none;}
+  #totalBar.show{display:block;}
+  #totalFill{height:100%; width:100%; background:#22c55e; transition:width 1s linear, background .3s;}
+  #totalFill.warn{background:#f59e0b;}
+  #totalFill.low{background:#ef4444; animation:pulse .6s infinite;}
 
   .prompt{position:absolute; top:70px; left:50%; transform:translateX(-50%); z-index:5; max-width:min(92vw,760px); text-align:center; pointer-events:none;}
   .prompt .box{background:rgba(255,255,255,.92); border-radius:22px; padding:12px 26px; box-shadow:var(--shadow); backdrop-filter:blur(4px); border-bottom:6px solid rgba(37,99,235,.5);}
@@ -399,6 +405,7 @@
         <div class="field"><label>คะแนนต่อข้อ</label><input type="number" id="edScore" min="1" max="100" value="10" /></div>
         <div class="field"><label>เวลาค้างมือ dwell (วินาที)</label><input type="number" id="edDwell" min="0.5" max="5" step="0.1" value="1.2" /></div>
         <div class="field"><label>หักคะแนนเมื่อผิด</label><input type="number" id="edPenalty" min="0" max="50" value="0" /></div>
+        <div class="field"><label>⏳ เวลารวมทั้งเกม (วินาที, 0 = ไม่จำกัด)</label><input type="number" id="edTotal" min="0" max="3600" value="0" /></div>
       </div>
       <div class="grid2" style="margin-top:4px;">
         <label class="switch"><input type="checkbox" id="edShuffle" checked /> สลับลำดับข้อ/ตัวเลือก</label>
@@ -422,13 +429,15 @@
   <div id="optionLayer"></div>
   <canvas id="fxCanvas"></canvas>
 
+  <div id="totalBar"><div id="totalFill"></div></div>
+
   <div class="hud" id="hudScore">⭐ <span id="scoreVal">0</span> <small id="scoreName">คะแนน</small></div>
   <div class="hud" id="hudTeams">
     <div class="team-score" id="teamScoreA"><span class="nm" id="tnA">ทีมแดง</span> <span id="tsA">0</span></div>
     <div class="team-score" id="teamScoreB"><span class="nm" id="tnB">ทีมน้ำเงิน</span> <span id="tsB">0</span></div>
   </div>
   <div class="hud" id="hudTimer"><span id="timerVal">20</span></div>
-  <div class="hud" id="hudProgress">ข้อ <span id="qNow">1</span>/<span id="qTotal">1</span></div>
+  <div class="hud" id="hudProgress">ข้อ <span id="qNow">1</span>/<span id="qTotal">1</span><span id="totalTimeWrap" hidden> • ⌛ <span id="totalTimeVal">0:00</span></span></div>
 
   <div class="prompt" id="promptBox">
     <div class="box"><div class="ptext" id="promptText"></div><img id="promptImg" hidden alt="โจทย์" /></div>
@@ -690,7 +699,7 @@ $('#importFile').onchange=async(e)=>{
   e.target.value='';
 };
 function normalizeSet(s){
-  s.settings=Object.assign({timePerQuestion:20,scorePerQuestion:10,dwellTime:1.2,shuffle:true,penalty:0,selectMode:'dwell'},s.settings||{});
+  s.settings=Object.assign({timePerQuestion:20,scorePerQuestion:10,dwellTime:1.2,shuffle:true,penalty:0,totalTimeLimit:0,selectMode:'dwell'},s.settings||{});
   s.icon=s.icon||'📘';
   s.questions=(s.questions||[]).map(q=>({id:q.id||uid(),promptText:q.promptText||'',promptImage:q.promptImage||null,
     options:(q.options||[]).map(o=>({id:o.id||uid(),text:o.text||'',image:o.image||null,correct:!!o.correct}))}));
@@ -704,7 +713,7 @@ let editing=null, editingExistingId=null;
 const ICONS=['📘','🌈','🍎','🔢','🐶','🚗','🔤','⭐','🎵','🦄','⚽','🌻'];
 function blankOption(){ return {id:uid(),text:'',image:null,correct:false}; }
 function blankQuestion(){ return {id:uid(),promptText:'',promptImage:null,options:[blankOption(),blankOption()]}; }
-function blankSet(){ return {id:uid(),name:'',icon:ICONS[Math.floor(Math.random()*ICONS.length)],settings:{timePerQuestion:20,scorePerQuestion:10,dwellTime:1.2,shuffle:true,penalty:0,selectMode:'dwell'},questions:[blankQuestion()]}; }
+function blankSet(){ return {id:uid(),name:'',icon:ICONS[Math.floor(Math.random()*ICONS.length)],settings:{timePerQuestion:20,scorePerQuestion:10,dwellTime:1.2,shuffle:true,penalty:0,totalTimeLimit:0,selectMode:'dwell'},questions:[blankQuestion()]}; }
 
 $('#btnNewSet').onclick=()=> openEditor(null);
 function openEditor(set){
@@ -716,6 +725,7 @@ function openEditor(set){
   $('#edScore').value=editing.settings.scorePerQuestion;
   $('#edDwell').value=editing.settings.dwellTime;
   $('#edPenalty').value=editing.settings.penalty;
+  $('#edTotal').value=editing.settings.totalTimeLimit||0;
   $('#edShuffle').checked=!!editing.settings.shuffle;
   $('#edMode').value=editing.settings.selectMode||'dwell';
   renderQuestions();
@@ -770,6 +780,7 @@ $('#btnEdSave').onclick=()=>{
   editing.settings.scorePerQuestion=clampNum($('#edScore').value,1,100,10);
   editing.settings.dwellTime=clampNum($('#edDwell').value,0.5,5,1.2);
   editing.settings.penalty=clampNum($('#edPenalty').value,0,50,0);
+  editing.settings.totalTimeLimit=clampNum($('#edTotal').value,0,3600,0);
   editing.settings.shuffle=$('#edShuffle').checked;
   editing.settings.selectMode=$('#edMode').value;
   const err=validateSet(editing); if(err){ alert(err); return; }
@@ -857,6 +868,7 @@ let hands=null, camera=null, handsReady=false;
 let latestHand=null, latestHandTime=0;
 let dwellIndex=-1, dwellAccum=0, lastTs=0, rafId=0;
 let questionTimer=null, timeLeft=0;
+let totalTimer=null, feedbackTimer=null;   // เวลารวมทั้งเกม + ตัวจับเวลาแสดงผลก่อนข้อต่อไป
 let optionRects=[];
 let audioCtx=null;
 
@@ -867,7 +879,8 @@ window.addEventListener('resize', resizeCanvases);
 async function startPlay(set, opts){
   if(!set.questions.length){ toast('ชุดนี้ยังไม่มีคำถาม'); return; }
   play={ set, opts, mode:opts.mode, queue:buildQueue(set), qIndex:0, score:0, correctCount:0, locked:true,
-         student:opts.student||null, teams:opts.teams||null, turn:0 };
+         student:opts.student||null, teams:opts.teams||null, turn:0,
+         ended:false, finished:false, timeUp:false, totalLeft:0, totalMax:0 };
   showScreen('screen-play'); resizeCanvases();
 
   // ตั้ง HUD ตามโหมด
@@ -885,7 +898,7 @@ async function startPlay(set, opts){
   setCamStatus(true,'กำลังเปิดกล้อง…','กรุณาอนุญาตให้ใช้กล้อง แล้วยกมือขึ้นมาให้กล้องเห็น 🖐️');
   try{
     await initHands(); await initCamera();
-    setCamStatus(false); renderCurrentQuestion(); startLoop();
+    setCamStatus(false); renderCurrentQuestion(); startTotalTimer(); startLoop();
   }catch(err){ console.error(err); setCamStatus(true,'เปิดกล้องไม่ได้ 😢',cameraErrMsg(err),true); }
 }
 function buildQueue(set){
@@ -1032,6 +1045,36 @@ function startQuestionTimer(){
 }
 function updateTimerHud(){ $('#timerVal').textContent=Math.max(0,timeLeft); $('#hudTimer').classList.toggle('low',timeLeft<=5); }
 
+/* ---------- เวลารวมทั้งเกม (นับครั้งเดียวตลอดเกม) ---------- */
+function fmtTime(s){ s=Math.max(0,Math.round(s)); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
+function startTotalTimer(){
+  clearInterval(totalTimer);
+  const lim=play.set.settings.totalTimeLimit||0;
+  if(lim>0){
+    play.totalLeft=lim; play.totalMax=lim;
+    $('#totalBar').classList.add('show'); $('#totalTimeWrap').hidden=false; updateTotalHud();
+    totalTimer=setInterval(()=>{ play.totalLeft--; updateTotalHud(); if(play.totalLeft<=0){ clearInterval(totalTimer); endByTotalTime(); } },1000);
+  }else{ $('#totalBar').classList.remove('show'); $('#totalTimeWrap').hidden=true; }
+}
+function updateTotalHud(){
+  const pct=play.totalMax?Math.max(0,play.totalLeft/play.totalMax*100):0;
+  const fill=$('#totalFill'); fill.style.width=pct+'%';
+  fill.classList.toggle('warn', pct<=50 && pct>25);
+  fill.classList.toggle('low', pct<=25);
+  $('#totalTimeVal').textContent=fmtTime(play.totalLeft);
+}
+function endByTotalTime(){
+  if(play.ended) return; play.ended=true; play.timeUp=true;
+  clearInterval(questionTimer); clearInterval(totalTimer); clearTimeout(feedbackTimer);
+  play.locked=true; dwellIndex=-1; dwellAccum=0;
+  showVerdict('⏰'); soundWrong();
+  setTimeout(finishGame,1200);
+}
+function finishGame(){
+  if(play.finished) return; play.finished=true;
+  play.mode==='teams'?showWinner():showResults();
+}
+
 function selectOption(idx){
   if(play.locked) return; play.locked=true; clearInterval(questionTimer); dwellIndex=-1; dwellAccum=0;
   const q=play.queue[play.qIndex], opt=q.options[idx], el=optionRects[idx];
@@ -1047,18 +1090,19 @@ function selectOption(idx){
     optionRects.forEach((o,i)=>{ if(q.options[i].correct) o.classList.add('reveal'); });
     soundWrong();
   }
-  setTimeout(nextQuestion,1500);
+  feedbackTimer=setTimeout(nextQuestion,1500);
 }
 function updateTeamHud(){ $('#tsA').textContent=play.teams[0].score; $('#tsB').textContent=play.teams[1].score; }
 function onTimeout(){
   if(play.locked) return; play.locked=true; dwellIndex=-1; dwellAccum=0;
   const q=play.queue[play.qIndex]; showVerdict('⏰');
   optionRects.forEach((o,i)=>{ if(q.options[i].correct) o.classList.add('reveal'); });
-  soundWrong(); setTimeout(nextQuestion,1500);
+  soundWrong(); feedbackTimer=setTimeout(nextQuestion,1500);
 }
 function nextQuestion(){
+  if(play.ended) return;
   hideVerdict(); play.qIndex++;
-  if(play.qIndex>=play.queue.length){ play.mode==='teams'?showWinner():showResults(); return; }
+  if(play.qIndex>=play.queue.length){ finishGame(); return; }
   renderCurrentQuestion();
 }
 function showVerdict(mark){ $('#verdictMark').textContent=mark; const v=$('#verdict'); v.hidden=false; const sp=$('#verdictMark'); sp.style.animation='none'; void sp.offsetWidth; sp.style.animation=''; }
@@ -1077,7 +1121,7 @@ function showResults(){
   $('#resScore').textContent=play.score; $('#resCorrect').textContent=correct; $('#resTotal').textContent=total;
   $('#resStars').textContent='⭐'.repeat(stars)+'☆'.repeat(3-stars);
   const msg=ratio>=0.99?['🏆','สุดยอดไปเลย!']:ratio>=0.6?['🎉','เก่งมาก!']:ratio>=0.3?['😊','พยายามได้ดี!']:['💪','ลองอีกครั้งนะ!'];
-  $('#resEmoji').textContent=msg[0]; $('#resTitle').textContent=msg[1];
+  $('#resEmoji').textContent=play.timeUp?'⏰':msg[0]; $('#resTitle').textContent=play.timeUp?'หมดเวลารวม!':msg[1];
   // บันทึกคะแนนให้นักเรียน (ถ้าไม่ใช่แขก)
   const note=$('#resSaved');
   if(play.student){
@@ -1107,7 +1151,7 @@ function showWinner(){
   showScreen('screen-winner');
 }
 
-function stopPlayEngine(){ cancelAnimationFrame(rafId); clearInterval(questionTimer); bgCtx.clearRect(0,0,bgCanvas.width,bgCanvas.height); fxCtx.clearRect(0,0,fxCanvas.width,fxCanvas.height); }
+function stopPlayEngine(){ cancelAnimationFrame(rafId); clearInterval(questionTimer); clearInterval(totalTimer); clearTimeout(feedbackTimer); $('#totalBar').classList.remove('show'); bgCtx.clearRect(0,0,bgCanvas.width,bgCanvas.height); fxCtx.clearRect(0,0,fxCanvas.width,fxCanvas.height); }
 function exitPlay(){ stopPlayEngine(); try{ camera&&camera.stop(); }catch(e){} if(video.srcObject){ video.srcObject.getTracks().forEach(t=>t.stop()); video.srcObject=null; } camera=null; renderHome(); showScreen('screen-home'); }
 function stopCameraOnly(){ try{ camera&&camera.stop(); }catch(e){} if(video.srcObject){ video.srcObject.getTracks().forEach(t=>t.stop()); video.srcObject=null; } camera=null; }
 
