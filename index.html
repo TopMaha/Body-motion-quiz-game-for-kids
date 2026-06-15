@@ -1030,14 +1030,47 @@ function showTurnBanner(team){
   host.appendChild(b); setTimeout(()=> host.innerHTML='', 1700);
   beep(team.color==='var(--teamA)'?440:330,0,0.12,'triangle',0.2);
 }
+// วางตัวเลือกแบบ "สุ่มกระจายไปคนละมุม" ทุกข้อ — ไม่ทับกันเอง และไม่ทับโจทย์/แถบคะแนน
+// (เปลี่ยนตำแหน่งทุกครั้งที่ขึ้นข้อใหม่ ทำให้เด็กลุ้นและสนุกขึ้น)
 function layoutPositions(n){
-  const vw=window.innerWidth, vh=window.innerHeight;
-  const size=Math.min(vw,vh)*(n>2?0.30:0.36); const w=size+'px', h=size+'px'; const pos=[];
-  const place=(xr,yr)=>({ left:`calc(${xr*100}vw - ${size/2}px)`, top:`calc(${yr*100}vh - ${size/2}px)`, w, h });
-  if(n===2) pos.push(place(0.27,0.62),place(0.73,0.62));
-  else if(n===3) pos.push(place(0.20,0.62),place(0.50,0.62),place(0.80,0.62));
-  else pos.push(place(0.28,0.45),place(0.72,0.45),place(0.28,0.80),place(0.72,0.80));
-  return pos;
+  const vw=window.innerWidth, vh=window.innerHeight, mn=Math.min(vw,vh);
+  const size=Math.round(mn*(n>=4?0.21:n===3?0.24:0.30));
+  const half=size/2, gap=Math.round(size*0.12), edge=half+22;   // เผื่อขอบให้วงแหวน dwell ไม่ตกจอ
+  const rand=(a,b)=> a+Math.random()*(b-a);
+  const inflate=(r,p)=>({left:r.left-p,top:r.top-p,right:r.right+p,bottom:r.bottom+p});
+  const intersect=(a,b)=> !(a.right<b.left||a.left>b.right||a.bottom<b.top||a.top>b.bottom);
+  // โซนห้ามวาง: โจทย์ + HUD ต่างๆ — เก็บ "โจทย์" แยกไว้ เป็นโซนที่ต้องเลี่ยงให้ได้เสมอ
+  const zones=[]; let promptZone=null;
+  ['#promptBox','#hudScore','#hudTimer','#hudTeams','#hudProgress','#btnExitPlay','#totalBar'].forEach(sel=>{
+    const el=document.querySelector(sel); if(!el||el.hidden||getComputedStyle(el).display==='none') return;
+    const r=el.getBoundingClientRect(); if(r.width<=0||r.height<=0) return;
+    zones.push(inflate(r,size*0.12));
+    if(sel==='#promptBox') promptZone=inflate(r,size*0.05);
+  });
+  const cardAt=(cx,cy,pad)=>({left:cx-half-pad,top:cy-half-pad,right:cx+half+pad,bottom:cy+half+pad});
+  const minX=edge, maxX=vw-edge, minY=edge, maxY=vh-edge;
+  const placed=[];
+  const noCardHit=(c,pad)=> !placed.some(p=>intersect(c,cardAt(p.cx,p.cy,pad)));
+  for(let i=0;i<n;i++){
+    let best=null;
+    // ค่อยๆ ผ่อนเงื่อนไขลง แต่ "เลี่ยงโจทย์" ไว้จนเกือบสุดท้าย
+    const tryPass=(tries,avoidZones,avoidPrompt,pad)=>{
+      for(let t=0;t<tries && !best;t++){
+        const cx=rand(minX,maxX), cy=rand(minY,maxY), c=cardAt(cx,cy,pad);
+        if(avoidZones && zones.some(z=>intersect(c,z))) continue;
+        if(avoidPrompt && promptZone && intersect(cardAt(cx,cy,0),promptZone)) continue;
+        if(!noCardHit(c,pad)) continue;
+        best={cx,cy};
+      }
+    };
+    tryPass(500,true,true,gap/2);   // เลี่ยงทุกโซน + เว้นช่องว่าง gap
+    tryPass(500,true,true,0);       // เลี่ยงทุกโซน + การ์ดแค่ไม่ทับ
+    tryPass(500,false,true,0);      // อย่างน้อยเลี่ยงโจทย์ + การ์ดไม่ทับ
+    tryPass(300,false,false,0);     // การ์ดไม่ทับอย่างเดียว
+    if(!best) best={cx:rand(minX,maxX),cy:rand(minY,maxY)};
+    placed.push(best);
+  }
+  return placed.map(p=>({ left:Math.round(p.cx-half)+'px', top:Math.round(p.cy-half)+'px', w:size+'px', h:size+'px' }));
 }
 function startQuestionTimer(){
   clearInterval(questionTimer); timeLeft=play.set.settings.timePerQuestion; updateTimerHud();
